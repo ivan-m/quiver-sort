@@ -1,0 +1,21 @@
+name:                quiver-sort
+version:             0.1.0.0
+synopsis:            Sort the values in a quiver
+description:         Sort the values in a quiver using temporary files.
+license:             MIT
+license-file:        LICENSE
+author:              Ivan Lazar Miljenovic
+maintainer:          Ivan.Miljenovic@gmail.com
+category:            Control
+build-type:          Simple
+extra-source-files:  README.md
+cabal-version:       >=1.10
+
+library
+  exposed-modules:     Control.Quiver.Sort
+  -- other-modules:       
+  build-depends:       base >=4.8 && <4.9
+                     , binary
+                     , quiver
+  hs-source-dirs:      src
+  default-language:    Haskell2010
