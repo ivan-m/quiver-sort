@@ -17,10 +17,17 @@ module Control.Quiver.Sort (
   , spsortOn
   ) where
 
-import Control.Monad     (ap)
+import Control.Quiver.Binary
+import Control.Quiver.Group
+import Control.Quiver.Interleave
 import Control.Quiver.SP
-import Data.Function     (on)
-import Data.List         (sortBy)
+
+import Control.Applicative ((<*>))
+import Data.Function       (on)
+import Data.List           (sortBy)
+import System.IO           (Handle, IOMode (..), hClose, openFile, openTempFile,
+                            withFile)
+import System.IO.Temp      (withSystemTempDirectory, withTempFile)
 
 --------------------------------------------------------------------------------
 
@@ -41,6 +48,6 @@ spsortBy f = (sortBy f <$> spfoldr (:) []) >>= spevery
 
 -- | Use the provided function to be able to compare values.
 spsortOn :: (Ord b, Monad m) => (a -> b) -> SP a a m ()
-spsortOn f = sppure (ap (,) f)
+spsortOn f = sppure ((,) <*> f)
              >->> spsortBy (compare `on` snd)
              >->> sppure fst >&> snd

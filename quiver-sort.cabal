@@ -19,12 +19,19 @@ source-repository head
 
 library
   exposed-modules:     Control.Quiver.Sort
-  -- other-modules:       
+  -- other-modules:
   build-depends:       base >=4.8 && <4.9
-                     , binary
                      , quiver >= 1.1.3 && < 1.2
+                     , quiver-binary == 0.1.*
+                     , quiver-bytestring == 1.0.*
+                     , quiver-groups == 0.1.*
+                     , quiver-interleave == 0.1.*
+                     , temporary == 1.2.*
+                     , transformers
   hs-source-dirs:      src
   default-language:    Haskell2010
+
+  ghc-options:         -Wall
 
 test-suite sorting-tests
   type:                exitcode-stdio-1.0
