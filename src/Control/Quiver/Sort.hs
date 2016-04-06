@@ -14,6 +14,7 @@ module Control.Quiver.Sort (
     -- $memory
     spsort
   , spsortBy
+  , spsortOn
   ) where
 
 import Control.Monad     (ap)
