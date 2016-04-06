@@ -11,6 +11,12 @@ build-type:          Simple
 extra-source-files:  README.md
 cabal-version:       >=1.10
 
+tested-with:   GHC == 7.10.2, GHC == 7.11.*
+
+source-repository head
+    type:         git
+    location:     https://github.com/ivan-m/quiver-sort.git
+
 library
   exposed-modules:     Control.Quiver.Sort
   -- other-modules:       
