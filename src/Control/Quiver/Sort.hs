@@ -35,6 +35,7 @@ import Control.Monad.IO.Class (MonadIO (..))
 import Data.Bool              (bool)
 import Data.Function          (on)
 import Data.List              (sortBy)
+import Data.Maybe             (fromMaybe)
 import System.Directory       (doesDirectoryExist, getPermissions, writable)
 import System.IO              (hClose, openTempFile)
 import System.IO.Temp         (withSystemTempDirectory, withTempDirectory)
@@ -72,24 +73,29 @@ and storing them in temporary files before merging them all together.
 
 -}
 
--- | Use external files to temporarily store partially sorted results.
---These files are stored inside the specified directory if provided;
---if no such directory is provided then the system temporary directory
---is used.
-spfilesort :: (Binary a, Ord a, MonadIO m, MonadMask m) => Maybe FilePath
+-- | Use external files to temporarily store partially sorted results
+-- (splitting into chunks of the specified size if one is provided).
+--
+-- These files are stored inside the specified directory if provided;
+-- if no such directory is provided then the system temporary
+-- directory is used.
+spfilesort :: (Binary a, Ord a, MonadIO m, MonadMask m) => Maybe Int -> Maybe FilePath
               -> P () a a () m (SPResult IOException)
 spfilesort = spfilesortBy compare
 
 -- | Use external files to temporarily store partially sorted (using
--- the comparison function) results.  These files are stored inside
--- the specified directory if provided; if no such directory is
--- provided then the system temporary directory is used.
-spfilesortBy :: (Binary a, MonadIO m, MonadMask m) => (a -> a -> Ordering) -> Maybe FilePath
+-- the comparison function) results (splitting into chunks of the
+-- specified size if one is provided).
+--
+-- These files are stored inside the specified directory if provided;
+-- if no such directory is provided then the system temporary
+-- directory is used.
+spfilesortBy :: (Binary a, MonadIO m, MonadMask m) => (a -> a -> Ordering) -> Maybe Int -> Maybe FilePath
                 -> P () a a () m (SPResult IOException)
-spfilesortBy cmp mdir = do mdir' <- join <$> liftIO (traverse checkDir mdir)
-                           enclose . getTmpDir mdir' "quiver-sort" $ \tmpDir -> do
-                             eef <- sprun (toFiles tmpDir)
-                             return (either spfailed (sortFromFiles cmp) eef)
+spfilesortBy cmp mchunks mdir = do mdir' <- join <$> liftIO (traverse checkDir mdir)
+                                   enclose . getTmpDir mdir' "quiver-sort" $ \tmpDir -> do
+                                     eef <- sprun (toFiles tmpDir)
+                                     return (either spfailed (sortFromFiles cmp) eef)
   where
     -- Make sure the directory exists and is writable.
     checkDir dir = do ex <- liftA2 (liftA2 (&&)) doesDirectoryExist (fmap writable . getPermissions) dir
@@ -97,22 +103,20 @@ spfilesortBy cmp mdir = do mdir' <- join <$> liftIO (traverse checkDir mdir)
 
     getTmpDir = maybe withSystemTempDirectory withTempDirectory
 
-    toFiles tmpDir = sortToFiles cmp tmpDir >->> spToList >&> (uncurry $ flip checkFailed)
+    toFiles tmpDir = sortToFiles chunkSize cmp tmpDir >->> spToList >&> (uncurry $ flip checkFailed)
 
--- TODO: make chunkSize configurable
-sortToFiles :: (Binary a, MonadIO m) => (a -> a -> Ordering) -> FilePath
+    chunkSize = fromMaybe 10000 mchunks
+
+sortToFiles :: (Binary a, MonadIO m) => Int -> (a -> a -> Ordering) -> FilePath
                -> SP a FilePath m IOException
-sortToFiles cmp tmpDir = spchunks chunkSize
-                         >->> spTraverseUntil sortChunk
-                         >&> snd
+sortToFiles chunkSize cmp tmpDir = spchunks chunkSize
+                                   >->> spTraverseUntil sortChunk
+                                   >&> snd
   where
     sortChunk as = liftIO $ do (fl,h) <- openTempFile tmpDir "quiver-sort-chunk"
                                finally (checkFailed fl <$> sprun (pipeline h)) (hClose h)
       where
         pipeline h = spevery (sortBy cmp as) >->> spencode >->> qPut h >&> snd
-
-    chunkSize :: Int
-    chunkSize = 10000
 
 sortFromFiles :: (Binary a, MonadIO m) => (a -> a -> Ordering) -> [FilePath]
                  -> Producer a () m (SPResult IOException)
