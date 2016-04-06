@@ -15,19 +15,29 @@ module Control.Quiver.Sort (
     spsort
   , spsortBy
   , spsortOn
+    -- * File-based sorting
+    -- $filesort
+  , spfilesort
+  , spfilesortBy
   ) where
 
 import Control.Quiver.Binary
+import Control.Quiver.ByteString
 import Control.Quiver.Group
 import Control.Quiver.Interleave
 import Control.Quiver.SP
 
-import Control.Applicative ((<*>))
-import Data.Function       (on)
-import Data.List           (sortBy)
-import System.IO           (Handle, IOMode (..), hClose, openFile, openTempFile,
-                            withFile)
-import System.IO.Temp      (withSystemTempDirectory, withTempFile)
+import Control.Applicative    (liftA2)
+import Control.Exception      (IOException, finally)
+import Control.Monad          (join)
+import Control.Monad.Catch    (MonadMask)
+import Control.Monad.IO.Class (MonadIO (..))
+import Data.Bool              (bool)
+import Data.Function          (on)
+import Data.List              (sortBy)
+import System.Directory       (doesDirectoryExist, getPermissions, writable)
+import System.IO              (hClose, openTempFile)
+import System.IO.Temp         (withSystemTempDirectory, withTempDirectory)
 
 --------------------------------------------------------------------------------
 
@@ -51,3 +61,78 @@ spsortOn :: (Ord b, Monad m) => (a -> b) -> SP a a m ()
 spsortOn f = sppure ((,) <*> f)
              >->> spsortBy (compare `on` snd)
              >->> sppure fst >&> snd
+
+--------------------------------------------------------------------------------
+
+{- $filesort
+
+For large Quivers it may not be possible to sort the entire stream in
+memory.  As such, these functions work by sorting chunks of the stream
+and storing them in temporary files before merging them all together.
+
+-}
+
+-- | Use external files to temporarily store partially sorted results.
+--These files are stored inside the specified directory if provided;
+--if no such directory is provided then the system temporary directory
+--is used.
+spfilesort :: (Binary a, Ord a, MonadIO m, MonadMask m) => Maybe FilePath
+              -> P () a a () m (SPResult IOException)
+spfilesort = spfilesortBy compare
+
+-- | Use external files to temporarily store partially sorted (using
+-- the comparison function) results.  These files are stored inside
+-- the specified directory if provided; if no such directory is
+-- provided then the system temporary directory is used.
+spfilesortBy :: (Binary a, MonadIO m, MonadMask m) => (a -> a -> Ordering) -> Maybe FilePath
+                -> P () a a () m (SPResult IOException)
+spfilesortBy cmp mdir = do mdir' <- join <$> liftIO (traverse checkDir mdir)
+                           enclose . getTmpDir mdir' "quiver-sort" $ \tmpDir -> do
+                             eef <- sprun (toFiles tmpDir)
+                             return (either spfailed (sortFromFiles cmp) eef)
+  where
+    -- Make sure the directory exists and is writable.
+    checkDir dir = do ex <- liftA2 (liftA2 (&&)) doesDirectoryExist (fmap writable . getPermissions) dir
+                      return (bool Nothing (Just dir) ex)
+
+    getTmpDir = maybe withSystemTempDirectory withTempDirectory
+
+    toFiles tmpDir = sortToFiles cmp tmpDir >->> spToList >&> (uncurry $ flip checkFailed)
+
+-- TODO: make chunkSize configurable
+sortToFiles :: (Binary a, MonadIO m) => (a -> a -> Ordering) -> FilePath
+               -> SP a FilePath m IOException
+sortToFiles cmp tmpDir = spchunks chunkSize
+                         >->> spTraverseUntil sortChunk
+                         >&> snd
+  where
+    sortChunk as = liftIO $ do (fl,h) <- openTempFile tmpDir "quiver-sort-chunk"
+                               finally (checkFailed fl <$> sprun (pipeline h)) (hClose h)
+      where
+        pipeline h = spevery (sortBy cmp as) >->> spencode >->> qPut h >&> snd
+
+    chunkSize :: Int
+    chunkSize = 10000
+
+sortFromFiles :: (Binary a, MonadIO m) => (a -> a -> Ordering) -> [FilePath]
+                 -> Producer a () m (SPResult IOException)
+sortFromFiles cmp fls = spinterleave cmp (map readFl fls)
+  where
+    -- Assume decoding is successful for now.
+    readFl fl = qhoist liftIO (qReadFile fl readSize) >->> spdecode >&> fst
+
+    readSize = 4096
+
+spTraverseUntil :: (Monad m) => (a -> m (Either e b)) -> SP a b m e
+spTraverseUntil k = loop
+  where
+    loop = spconsume loop' spcomplete
+    loop' a = qlift (k a) >>= either spfailed (>:> loop)
+
+-- Ignore SPIncomplete values
+checkFailed :: r -> SPResult e -> Either e r
+checkFailed _ (Just (Just e)) = Left e
+checkFailed r _               = Right r
+
+spToList :: SQ a x f [a]
+spToList = spfoldr (:) []
