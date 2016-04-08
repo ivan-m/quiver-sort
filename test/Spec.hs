@@ -48,5 +48,5 @@ spIdentityList p as = spIdentity (spList p as)
 spList :: (Functor f) => P () a b () f e -> [a] -> Effect f [b]
 spList p as = spevery as >->> p >->> spToList >&> snd
 
-fileSort :: (Show a, Binary a, Ord a) => Int -> [a] -> IO [a]
+fileSort :: (Binary a, Ord a) => Int -> [a] -> IO [a]
 fileSort cs as = runEffect $ spList (spfilesort (Just cs) Nothing) as
