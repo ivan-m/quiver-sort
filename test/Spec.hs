@@ -16,7 +16,7 @@ import Control.Quiver.Sort
 import Control.Applicative      (liftA2)
 import Control.Exception        (evaluate)
 import Control.Monad            (void)
-import Control.Monad.Catch      (throwM)
+import Control.Monad.Catch      (catchAll, throwM)
 import Control.Quiver.Instances ()
 import Control.Quiver.SP
 import Data.Binary              (Binary)
@@ -67,11 +67,12 @@ fileSort cs as = sprun $ spList (spfilesort (Just cs) Nothing) as
 fileSortCleanup :: (Show a, Binary a, Ord a) => Producer a () IO e -> Expectation
 fileSortCleanup prod = withSystemTempDirectory "test-quiver-sort-cleanup" $ \tmpDir -> do
                          cnts0 <- getDirectoryContents tmpDir -- Should be [".", ".."]
-                         _ <- sprun (pipeline tmpDir)
+                         catchAll (sprun (pipeline tmpDir)) (const $ return ())
                          (sort <$> getDirectoryContents tmpDir) `shouldReturn` sort cnts0
   where
     pipeline tmpDir = prod
                       -- Use a chunk size of 1 to make sure files are
                       -- created, even if an exception is thrown.
-                      >->> spfilesort (Just 1) (Just tmpDir) >&> snd
-                      >->> sptraverse (void . evaluate) >&> fst -- Just to consume them all
+                      >->> spfilesort (Just 1) (Just tmpDir)
+                      >->> sptraverse_ (lift . void . evaluate) -- Just to consume them all
+                      >&> const ()
