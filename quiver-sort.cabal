@@ -1,7 +1,9 @@
 name:                quiver-sort
 version:             0.1.0.0
 synopsis:            Sort the values in a quiver
-description:         Sort the values in a quiver using temporary files.
+description:
+  Allows sorting values within a Quiver, including using external
+  files for large/long pipelines.
 license:             MIT
 license-file:        LICENSE
 author:              Ivan Lazar Miljenovic
