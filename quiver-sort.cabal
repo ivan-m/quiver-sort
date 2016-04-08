@@ -44,7 +44,11 @@ test-suite sorting-tests
   build-depends:       quiver-sort
                      , base
                      , binary
+                     , directory
+                     , exceptions
                      , quiver
+                     , quiver-instances
+                     , temporary
                      , transformers
 
                      , QuickCheck >= 2.5 && < 2.9
