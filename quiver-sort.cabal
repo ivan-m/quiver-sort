@@ -27,6 +27,7 @@ library
                      , quiver-binary >= 0.1.1.0 && < 0.1.2
                      , quiver-bytestring == 1.0.*
                      , quiver-groups == 0.1.*
+                     , quiver-instances == 0.1.*
                      , quiver-interleave == 0.2.*
                      , temporary == 1.2.*
                      , transformers

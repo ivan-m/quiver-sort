@@ -24,6 +24,7 @@ module Control.Quiver.Sort (
 import Control.Quiver.Binary
 import Control.Quiver.ByteString
 import Control.Quiver.Group
+import Control.Quiver.Instances  ()
 import Control.Quiver.Interleave
 import Control.Quiver.SP
 
@@ -93,9 +94,7 @@ spfilesort = spfilesortBy compare
 spfilesortBy :: (Binary a, MonadIO m, MonadMask m) => (a -> a -> Ordering) -> Maybe Int -> Maybe FilePath
                 -> P () a a () m (SPResult IOException)
 spfilesortBy cmp mchunks mdir = do mdir' <- join <$> liftIO (traverse checkDir mdir)
-                                   enclose . getTmpDir mdir' "quiver-sort" $ \tmpDir -> do
-                                     eef <- sprun (toFiles tmpDir)
-                                     return (either spfailed (sortFromFiles cmp) eef)
+                                   getTmpDir mdir' "quiver-sort" pipeline
   where
     -- Make sure the directory exists and is writable.
     checkDir dir = do ex <- liftA2 (liftA2 (&&)) doesDirectoryExist (fmap writable . getPermissions) dir
@@ -103,7 +102,9 @@ spfilesortBy cmp mchunks mdir = do mdir' <- join <$> liftIO (traverse checkDir m
 
     getTmpDir = maybe withSystemTempDirectory withTempDirectory
 
-    toFiles tmpDir = sortToFiles chunkSize cmp tmpDir >->> spToList >&> (uncurry $ flip checkFailed)
+    pipeline tmpDir = toFiles tmpDir >>= either spfailed (sortFromFiles cmp)
+
+    toFiles tmpDir = sortToFiles chunkSize cmp tmpDir >->> spToList >&> uncurry (flip checkFailed)
 
     chunkSize = fromMaybe 10000 mchunks
 
