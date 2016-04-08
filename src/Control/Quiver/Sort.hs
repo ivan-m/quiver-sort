@@ -28,18 +28,20 @@ import Control.Quiver.Instances  ()
 import Control.Quiver.Interleave
 import Control.Quiver.SP
 
-import Control.Applicative    (liftA2)
-import Control.Exception      (IOException, finally)
-import Control.Monad          (join)
-import Control.Monad.Catch    (MonadMask)
-import Control.Monad.IO.Class (MonadIO (..))
-import Data.Bool              (bool)
-import Data.Function          (on)
-import Data.List              (sortBy)
-import Data.Maybe             (fromMaybe)
-import System.Directory       (doesDirectoryExist, getPermissions, writable)
-import System.IO              (hClose, openTempFile)
-import System.IO.Temp         (withSystemTempDirectory, withTempDirectory)
+import Control.Applicative          (liftA2)
+import Control.Exception            (IOException, finally)
+import Control.Monad                (join)
+import Control.Monad.Catch          (MonadMask)
+import Control.Monad.IO.Class       (MonadIO (..))
+import Control.Monad.Trans.Resource (MonadResource)
+import Data.Bool                    (bool)
+import Data.Function                (on)
+import Data.List                    (sortBy)
+import Data.Maybe                   (fromMaybe)
+import System.Directory             (doesDirectoryExist, getPermissions,
+                                     writable)
+import System.IO                    (hClose, openTempFile)
+import System.IO.Temp               (withSystemTempDirectory, withTempDirectory)
 
 --------------------------------------------------------------------------------
 
@@ -80,7 +82,7 @@ and storing them in temporary files before merging them all together.
 -- These files are stored inside the specified directory if provided;
 -- if no such directory is provided then the system temporary
 -- directory is used.
-spfilesort :: (Binary a, Ord a, MonadIO m, MonadMask m) => Maybe Int -> Maybe FilePath
+spfilesort :: (Binary a, Ord a, MonadResource m, MonadMask m) => Maybe Int -> Maybe FilePath
               -> P () a a () m (SPResult IOException)
 spfilesort = spfilesortBy compare
 
@@ -91,7 +93,7 @@ spfilesort = spfilesortBy compare
 -- These files are stored inside the specified directory if provided;
 -- if no such directory is provided then the system temporary
 -- directory is used.
-spfilesortBy :: (Binary a, MonadIO m, MonadMask m) => (a -> a -> Ordering) -> Maybe Int -> Maybe FilePath
+spfilesortBy :: (Binary a, MonadResource m, MonadMask m) => (a -> a -> Ordering) -> Maybe Int -> Maybe FilePath
                 -> P () a a () m (SPResult IOException)
 spfilesortBy cmp mchunks mdir = do mdir' <- join <$> liftIO (traverse checkDir mdir)
                                    getTmpDir mdir' "quiver-sort" pipeline

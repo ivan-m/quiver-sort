@@ -31,6 +31,7 @@ library
                      , quiver-groups == 0.1.*
                      , quiver-instances == 0.1.*
                      , quiver-interleave == 0.2.*
+                     , resourcet == 1.1.*
                      , temporary == 1.2.*
                      , transformers
   hs-source-dirs:      src
@@ -48,6 +49,7 @@ test-suite sorting-tests
                      , exceptions
                      , quiver
                      , quiver-instances
+                     , resourcet
                      , temporary
                      , transformers
 
