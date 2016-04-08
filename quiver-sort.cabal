@@ -41,7 +41,9 @@ test-suite sorting-tests
   main-is:             Spec.hs
   build-depends:       quiver-sort
                      , base
+                     , binary
                      , quiver
+                     , transformers
 
                      , QuickCheck >= 2.5 && < 2.9
                      , hspec >= 2.1 && < 2.3
