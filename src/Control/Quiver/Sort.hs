@@ -1,4 +1,4 @@
-{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE RankNTypes, ScopedTypeVariables #-}
 {- |
    Module      : Control.Quiver.Sort
    Description : Sort values in a Quiver
@@ -28,18 +28,21 @@ import Control.Quiver.Instances  ()
 import Control.Quiver.Interleave
 import Control.Quiver.SP
 
-import Control.Applicative    (liftA2)
-import Control.Exception      (IOException, finally)
-import Control.Monad          (join)
-import Control.Monad.Catch    (MonadMask)
-import Control.Monad.IO.Class (MonadIO (..))
-import Data.Bool              (bool)
-import Data.Function          (on)
-import Data.List              (sortBy)
-import Data.Maybe             (fromMaybe)
-import System.Directory       (doesDirectoryExist, getPermissions, writable)
-import System.IO              (hClose, openTempFile)
-import System.IO.Temp         (withSystemTempDirectory, withTempDirectory)
+import Control.Applicative          (liftA2)
+import Control.Exception            (IOException, finally)
+import Control.Monad                (join)
+import Control.Monad.Catch          (MonadCatch (..), MonadMask)
+import Control.Monad.IO.Class       (MonadIO (..))
+import Control.Monad.Trans.Resource (MonadResource, allocate)
+import Data.Bool                    (bool)
+import Data.Function                (on)
+import Data.List                    (sortBy)
+import Data.Maybe                   (fromMaybe)
+import System.Directory             (doesDirectoryExist, getPermissions,
+                                     getTemporaryDirectory,
+                                     removeDirectoryRecursive, writable)
+import System.IO                    (hClose, openTempFile)
+import System.IO.Temp               (createTempDirectory)
 
 --------------------------------------------------------------------------------
 
@@ -80,7 +83,7 @@ and storing them in temporary files before merging them all together.
 -- These files are stored inside the specified directory if provided;
 -- if no such directory is provided then the system temporary
 -- directory is used.
-spfilesort :: (Binary a, Ord a, MonadIO m, MonadMask m) => Maybe Int -> Maybe FilePath
+spfilesort :: (Binary a, Ord a, MonadResource m, MonadMask m) => Maybe Int -> Maybe FilePath
               -> P () a a () m (SPResult IOException)
 spfilesort = spfilesortBy compare
 
@@ -91,7 +94,7 @@ spfilesort = spfilesortBy compare
 -- These files are stored inside the specified directory if provided;
 -- if no such directory is provided then the system temporary
 -- directory is used.
-spfilesortBy :: (Binary a, MonadIO m, MonadMask m) => (a -> a -> Ordering) -> Maybe Int -> Maybe FilePath
+spfilesortBy :: (Binary a, MonadResource m, MonadMask m) => (a -> a -> Ordering) -> Maybe Int -> Maybe FilePath
                 -> P () a a () m (SPResult IOException)
 spfilesortBy cmp mchunks mdir = do mdir' <- join <$> liftIO (traverse checkDir mdir)
                                    getTmpDir mdir' "quiver-sort" pipeline
@@ -141,3 +144,25 @@ checkFailed r _               = Right r
 
 spToList :: SQ a x f [a]
 spToList = spfoldr (:) []
+
+--------------------------------------------------------------------------------
+-- Creating the temporary directory
+
+withSystemTempDirectory :: (MonadResource m) =>
+                           String   -- ^ Directory name template. See 'openTempFile'.
+                        -> (FilePath -> m a) -- ^ Callback that can use the directory
+                        -> m a
+withSystemTempDirectory template action = liftIO getTemporaryDirectory >>= \tmpDir -> withTempDirectory tmpDir template action
+
+withTempDirectory :: (MonadResource m) =>
+                     FilePath -- ^ Temp directory to create the directory in
+                  -> String   -- ^ Directory name template. See 'openTempFile'.
+                  -> (FilePath -> m a) -- ^ Callback that can use the directory
+                  -> m a
+withTempDirectory targetDir template withTmp = do
+  (_release, tmpDir) <- allocate (createTempDirectory targetDir template)
+                                 (ignoringIOErrors . removeDirectoryRecursive)
+  withTmp tmpDir
+
+ignoringIOErrors :: (MonadCatch m) => m () -> m ()
+ignoringIOErrors ioe = ioe `catch` (\(_ :: IOError) -> return ())
