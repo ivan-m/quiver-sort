@@ -1,4 +1,4 @@
-{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE RankNTypes, ScopedTypeVariables #-}
 {- |
    Module      : Control.Quiver.Sort
    Description : Sort values in a Quiver
@@ -31,17 +31,18 @@ import Control.Quiver.SP
 import Control.Applicative          (liftA2)
 import Control.Exception            (IOException, finally)
 import Control.Monad                (join)
-import Control.Monad.Catch          (MonadMask)
+import Control.Monad.Catch          (MonadCatch (..), MonadMask)
 import Control.Monad.IO.Class       (MonadIO (..))
-import Control.Monad.Trans.Resource (MonadResource)
+import Control.Monad.Trans.Resource (MonadResource, allocate)
 import Data.Bool                    (bool)
 import Data.Function                (on)
 import Data.List                    (sortBy)
 import Data.Maybe                   (fromMaybe)
 import System.Directory             (doesDirectoryExist, getPermissions,
-                                     writable)
+                                     getTemporaryDirectory,
+                                     removeDirectoryRecursive, writable)
 import System.IO                    (hClose, openTempFile)
-import System.IO.Temp               (withSystemTempDirectory, withTempDirectory)
+import System.IO.Temp               (createTempDirectory)
 
 --------------------------------------------------------------------------------
 
@@ -143,3 +144,25 @@ checkFailed r _               = Right r
 
 spToList :: SQ a x f [a]
 spToList = spfoldr (:) []
+
+--------------------------------------------------------------------------------
+-- Creating the temporary directory
+
+withSystemTempDirectory :: (MonadResource m) =>
+                           String   -- ^ Directory name template. See 'openTempFile'.
+                        -> (FilePath -> m a) -- ^ Callback that can use the directory
+                        -> m a
+withSystemTempDirectory template action = liftIO getTemporaryDirectory >>= \tmpDir -> withTempDirectory tmpDir template action
+
+withTempDirectory :: (MonadResource m) =>
+                     FilePath -- ^ Temp directory to create the directory in
+                  -> String   -- ^ Directory name template. See 'openTempFile'.
+                  -> (FilePath -> m a) -- ^ Callback that can use the directory
+                  -> m a
+withTempDirectory targetDir template withTmp = do
+  (_release, tmpDir) <- allocate (createTempDirectory targetDir template)
+                                 (ignoringIOErrors . removeDirectoryRecursive)
+  withTmp tmpDir
+
+ignoringIOErrors :: (MonadCatch m) => m () -> m ()
+ignoringIOErrors ioe = ioe `catch` (\(_ :: IOError) -> return ())

@@ -67,11 +67,10 @@ fileSort cs as = runResourceT $ sprun $ spList (spfilesort (Just cs) Nothing) as
 
 -- The provided producer is assumed to be short.
 fileSortCleanup :: (Binary a, Ord a) => Producer a () IO e -> Expectation
-fileSortCleanup prod = runResourceT $
-                         withSystemTempDirectory "test-quiver-sort-cleanup" $ \tmpDir -> do
-                           cnts0 <- lift $ getDirectoryContents tmpDir -- Should be [".", ".."]
-                           catchAll (sprun (pipeline tmpDir)) (const $ return ())
-                           lift ((sort <$> getDirectoryContents tmpDir) `shouldReturn` sort cnts0)
+fileSortCleanup prod = withSystemTempDirectory "test-quiver-sort-cleanup" $ \tmpDir -> do
+                         cnts0 <- getDirectoryContents tmpDir -- Should be [".", ".."]
+                         catchAll (runResourceT (sprun (pipeline tmpDir))) (const $ return ())
+                         (sort <$> getDirectoryContents tmpDir) `shouldReturn` sort cnts0
   where
     pipeline :: FilePath -> Effect (ResourceT IO) ()
     pipeline tmpDir = qhoist lift prod
