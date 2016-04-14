@@ -11,6 +11,7 @@ maintainer:          Ivan.Miljenovic@gmail.com
 category:            Control
 build-type:          Simple
 extra-source-files:  README.md
+                   , stack.yaml
 cabal-version:       >=1.10
 
 tested-with:   GHC == 7.10.2, GHC == 7.11.*
