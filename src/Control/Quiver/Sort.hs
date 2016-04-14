@@ -19,6 +19,11 @@ module Control.Quiver.Sort (
     -- $filesort
   , spfilesort
   , spfilesortBy
+    -- ** Configuration
+  , SPFileConfig
+  , defaultConfig
+  , setChunkSize
+  , setTempDir
   ) where
 
 import Control.Quiver.Binary
@@ -37,7 +42,6 @@ import Control.Monad.Trans.Resource (MonadResource, allocate)
 import Data.Bool                    (bool)
 import Data.Function                (on)
 import Data.List                    (sortBy)
-import Data.Maybe                   (fromMaybe)
 import System.Directory             (doesDirectoryExist, getPermissions,
                                      getTemporaryDirectory,
                                      removeDirectoryRecursive, writable)
@@ -77,13 +81,48 @@ and storing them in temporary files before merging them all together.
 
 -}
 
+-- | Configuration settings for 'spfilesort' and 'spfilesortBy'.  Use
+-- 'defaultConfig' and the various @set*@ functions to configure it.
+data SPFileConfig = FC { _chunkSize  :: Int
+                         -- ^ How large the chunks should be for
+                         -- individual sorting.
+                       , _withTmpDir :: Maybe FilePath
+                         -- ^ Where to store temporary files.  Will be
+                         -- cleaned up afterwards.  'Nothing'
+                         -- indicates to use the system temporary
+                         -- directory.
+                       }
+
+-- | Default settings for sorting using external files:
+--
+--   * Have a chunk size of @1000@.
+--
+--   * Use the system temporary directory.
+defaultConfig :: SPFileConfig
+defaultConfig = FC { _chunkSize  = 1000
+                   , _withTmpDir = Nothing
+                   }
+
+-- | Specify the size of chunks to be individually sorted: the larger
+-- the value the fewer temporary files need to be created but the more
+-- memory needed to accumulate the values and sort them.
+setChunkSize :: Int -> SPFileConfig -> SPFileConfig
+setChunkSize cs cfg = cfg { _chunkSize = cs }
+
+-- | Specify where temporary files should be stored.
+--
+--   Typically you would only set this if the system temporary
+--   directory isn't large or fast enough.
+setTempDir :: FilePath -> SPFileConfig -> SPFileConfig
+setTempDir dir cfg = cfg { _withTmpDir = Just dir }
+
 -- | Use external files to temporarily store partially sorted results
 -- (splitting into chunks of the specified size if one is provided).
 --
 -- These files are stored inside the specified directory if provided;
 -- if no such directory is provided then the system temporary
 -- directory is used.
-spfilesort :: (Binary a, Ord a, MonadResource m, MonadMask m) => Maybe Int -> Maybe FilePath
+spfilesort :: (Binary a, Ord a, MonadResource m, MonadMask m) => SPFileConfig
               -> P () a a () m (SPResult IOException)
 spfilesort = spfilesortBy compare
 
@@ -94,10 +133,10 @@ spfilesort = spfilesortBy compare
 -- These files are stored inside the specified directory if provided;
 -- if no such directory is provided then the system temporary
 -- directory is used.
-spfilesortBy :: (Binary a, MonadResource m, MonadMask m) => (a -> a -> Ordering) -> Maybe Int -> Maybe FilePath
+spfilesortBy :: (Binary a, MonadResource m, MonadMask m) => (a -> a -> Ordering) -> SPFileConfig
                 -> P () a a () m (SPResult IOException)
-spfilesortBy cmp mchunks mdir = do mdir' <- join <$> liftIO (traverse checkDir mdir)
-                                   getTmpDir mdir' "quiver-sort" pipeline
+spfilesortBy cmp cfg = do mdir' <- join <$> liftIO (traverse checkDir (_withTmpDir cfg))
+                          getTmpDir mdir' "quiver-sort" pipeline
   where
     -- Make sure the directory exists and is writable.
     checkDir dir = do ex <- liftA2 (liftA2 (&&)) doesDirectoryExist (fmap writable . getPermissions) dir
@@ -109,7 +148,7 @@ spfilesortBy cmp mchunks mdir = do mdir' <- join <$> liftIO (traverse checkDir m
 
     toFiles tmpDir = sortToFiles chunkSize cmp tmpDir >->> spToList >&> uncurry (flip checkFailed)
 
-    chunkSize = fromMaybe 10000 mchunks
+    chunkSize = _chunkSize cfg
 
 sortToFiles :: (Binary a, MonadIO m) => Int -> (a -> a -> Ordering) -> FilePath
                -> SP a FilePath m IOException
