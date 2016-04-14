@@ -83,10 +83,10 @@ and storing them in temporary files before merging them all together.
 
 -- | Configuration settings for 'spfilesort' and 'spfilesortBy'.  Use
 -- 'defaultConfig' and the various @set*@ functions to configure it.
-data SPFileConfig = FC { _chunkSize  :: Int
+data SPFileConfig = FC { _chunkSize  :: !Int
                          -- ^ How large the chunks should be for
                          -- individual sorting.
-                       , _withTmpDir :: Maybe FilePath
+                       , _withTmpDir :: !(Maybe FilePath)
                          -- ^ Where to store temporary files.  Will be
                          -- cleaned up afterwards.  'Nothing'
                          -- indicates to use the system temporary
