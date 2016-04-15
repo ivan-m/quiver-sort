@@ -54,7 +54,7 @@ import           System.Directory             (doesDirectoryExist,
                                                getPermissions,
                                                getTemporaryDirectory,
                                                removeDirectoryRecursive,
-                                               writable)
+                                               removeFile, writable)
 import           System.IO                    (hClose, openTempFile)
 import           System.IO.Temp               (createTempDirectory)
 
@@ -204,6 +204,7 @@ sortFromFiles mf cmp tmpDir = nextBatch
     nextBatch fls   = case S.splitAt mf fls of
                         (b,Empty) -> batch b
                         (b,fls')  -> do br <- qlift (writeBatch b)
+                                        liftIO $ mapM_ removeFile b
                                         either spfailed (nextBatch . (fls' |>)) br
 
     writeBatch = writeOut tmpDir . batch
