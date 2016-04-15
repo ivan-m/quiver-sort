@@ -132,6 +132,8 @@ setChunkSize cs cfg = cfg { _chunkSize = cs }
 --
 --   Typically you would only set this if the system temporary
 --   directory isn't large or fast enough.
+--
+--   NOTE: this directory /must/ exist and be writable!
 setTempDir :: FilePath -> SPFileConfig -> SPFileConfig
 setTempDir dir cfg = cfg { _withTmpDir = Just dir }
 
