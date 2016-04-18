@@ -192,7 +192,8 @@ sortToFiles chunkSize cmp tmpDir = spchunks chunkSize
 writeOut :: (Binary a, MonadIO m, MonadMask m) => FilePath -> P () x a () m (SPResult IOException)
             -> m (Either IOException FilePath)
 writeOut tmpDir p = do (fl,h) <- liftIO (openTempFile tmpDir "quiver-sort-chunk")
-                       finally (checkFailed fl <$> sprun (pipeline h)) (liftIO (hClose h))
+                       finally (checkFailed fl <$> sprun (pipeline h) <* liftIO (hClose h))
+                               (liftIO (hClose h))
   where
     pipeline h = p >->> spencode >&> fst >->> qhoist liftIO (qPut h) >&> getFirstError
 
