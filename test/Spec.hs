@@ -63,7 +63,7 @@ spList :: (Functor f) => P () a b () f e -> [a] -> Effect f [b]
 spList p as = spevery as >->> p >->> spToList >&> snd
 
 fileSort :: (Binary a, Ord a) => Int -> [a] -> IO [a]
-fileSort cs as = runResourceT $ sprun $ spList (spfilesort (Just cs) Nothing) as
+fileSort cs as = runResourceT $ sprun $ spList (spfilesort (setChunkSize cs defaultConfig)) as
 
 -- The provided producer is assumed to be short.
 fileSortCleanup :: (Binary a, Ord a) => Producer a () IO e -> Expectation
@@ -76,6 +76,6 @@ fileSortCleanup prod = withSystemTempDirectory "test-quiver-sort-cleanup" $ \tmp
     pipeline tmpDir = qhoist lift prod
                       -- Use a chunk size of 1 to make sure files are
                       -- created, even if an exception is thrown.
-                      >->> spfilesort (Just 1) (Just tmpDir)
+                      >->> spfilesort (setChunkSize 1 . setTempDir tmpDir $ defaultConfig)
                       >->> sptraverse_ (lift . void . evaluate) -- Just to consume them all
                       >&> const ()
