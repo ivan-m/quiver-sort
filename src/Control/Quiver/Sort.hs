@@ -38,16 +38,16 @@ import Control.Quiver.SP
 import           Control.Applicative          (liftA2)
 import           Control.Exception            (IOException)
 import           Control.Monad                (join)
-import           Control.Monad.Catch          (MonadCatch (..), MonadMask,
+import           Control.Monad.Catch          (MonadCatch(..), MonadMask,
                                                finally)
-import           Control.Monad.IO.Class       (MonadIO (..))
+import           Control.Monad.IO.Class       (MonadIO(..))
 import           Control.Monad.Trans.Resource (MonadResource, allocate)
 import           Data.Bool                    (bool)
 import           Data.Coerce                  (coerce)
 import           Data.Foldable                (toList)
 import           Data.Function                (on)
 import           Data.List                    (sortBy)
-import           Data.Monoid                  (First (..), (<>))
+import           Data.Monoid                  (First(..), (<>))
 import           Data.Sequence                (Seq, (|>))
 import qualified Data.Sequence                as S
 import           System.Directory             (doesDirectoryExist,
@@ -218,6 +218,7 @@ sortFromFiles mf cmp tmpDir = nextBatch
     readSize = 4096
 
 -- Just to make it nicer to pattern-match
+pattern Empty :: Seq a
 pattern Empty <- (S.viewl -> S.EmptyL)
 
 spTraverseUntil :: (Monad m) => (a -> m (Either e b)) -> SP a b m e

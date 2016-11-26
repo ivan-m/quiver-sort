@@ -54,7 +54,7 @@ spToList :: SQ a x f [a]
 spToList = spfoldr (:) []
 
 spIdentity :: SQ a b Identity c -> c
-spIdentity = runIdentity . sprun
+spIdentity q = runIdentity (sprun q)
 
 spIdentityList :: SQ a b Identity e -> [a] -> [b]
 spIdentityList p as = spIdentity (spList p as)
